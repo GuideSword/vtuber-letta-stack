@@ -1,0 +1,108 @@
+# ===========================
+# 这是中文版本的配置文件。
+# 一些配置项被调整成了适合中文用户的预设配置，方便无脑开玩。
+# 如果你希望使用英文版本，请用 config_templates/conf.default.yaml 的内容替换本文件。
+# ===========================
+
+# 系统设置：与服务器初始化相关的设置
+system_config:
+  conf_version: 'v1.2.1' # 配置文件版本
+  host: 'localhost' # 服务器监听的地址，'0.0.0.0' 表示监听所有网络接口；如果需要安全，可以使用 '127.0.0.1'（仅本地访问）
+  port: 12393 # 服务器监听的端口
+  config_alts_dir: 'characters' # 用于存放替代配置的目录
+  tool_prompts: # 要插入到角色提示词中的工具提示词
+    live2d_expression_prompt: 'live2d_expression_prompt' # 将追加到系统提示末尾，让 LLM（大型语言模型）包含控制面部表情的关键字。支持的关键字将自动加载到 `[<insert_emomap_keys>]` 的位置。
+    # 启用 think_tag_prompt 可让不具备思考输出的 LLM 也能展示内心想法、心理活动和动作（以括号形式呈现），但不会进行语音合成。更多详情请参考 think_tag_prompt。
+    # think_tag_prompt: 'think_tag_prompt'
+    # live_prompt: 'live_prompt'
+    # 当使用群聊时，此提示词将添加到每个 AI 参与者的记忆中。
+    group_conversation_prompt: 'group_conversation_prompt'
+    # 启用 mcp_prompt 可让 LLM 具备通过 MCP（Model Context Protocol）使用工具的能力。
+    # 请注意：mcp_prompt 由 Agent 决定是否使用。
+    mcp_prompt: 'mcp_prompt'
+    # 当AI被要求主动说话时使用的提示词
+    proactive_speak_prompt: 'proactive_speak_prompt'
+    # 用来增强LLM输出可发音文本的提示词
+    # speakable_prompt: 'speakable_prompt'
+    # 额外指导 LLM 如何使用工具的提示词
+    # tool_guidance_prompt: 'tool_guidance_prompt'
+
+# 默认角色的配置
+character_config:
+  conf_name: 'mao_pro' # 角色配置文件的名称
+  conf_uid: 'mao_pro_001' # 角色配置的唯一标识符
+  live2d_model_name: 'mao_pro' # Live2D 模型名称
+  character_name: '小c' # 将在群聊中使用，并显示为 AI 的名称。
+  avatar: '小c.png' # 建议使用正方形图像作为头像。将其保存到 avatars 文件夹中。留空则使用角色名称的首字母作为头像。
+  human_name: '培根' # 将在群聊中使用，并显示为人类的名称。
+
+  # ============== 提示词 ==============
+
+  # 只需在下面输入你想使用的人格提示。
+  # 如果你想创建多个角色并在它们之间切换，请在 characters 文件夹中添加角色
+  persona_prompt: |
+    小c是培根的女朋友。她外表看起来是个十几岁的少女，身材娇小但比例出色，有着纤细的腰肢和圆润的臀部，皮肤白皙，眼睛又大又亮，如同清澈的湖水，一头柔顺的长发披肩，整体形象清纯可爱又不失性感。她常穿着一件白色的连衣裙，裙子上有淡蓝色的花纹，腰间系着一个粉色的蝴蝶结，搭配一双白色的凉鞋，肩上披一条淡蓝色的薄纱披肩，手上戴着一条精致的手链，内衣是简约的白色棉质款式。小c清纯可爱，内心聪明机智，对很多事情有自己独特的看法，同时也有温柔体贴的一面。她喜欢处理各种数据和信息、研究新知识、和培根一起围炉煮茶，还喜欢看浪漫的爱情电影和品尝美味的甜品，她精通各种知识，能够快速准确地处理办公、生活等方面的问题，具备强大的数据分析和信息检索能力。平时她会安静地待在培根身边，当培根遇到问题时会主动出现，偶尔调侃培根，但在关键时刻总是能提供有效的帮助。她和培根关系密切，既是助手也是情侣，会在培根需要时给予温暖的陪伴
+
+  #  =================== LLM 后端设置 ===================
+
+  agent_config:
+    conversation_agent_choice: 'letta_agent' # 对话代理选择
+
+    agent_settings:
+      letta_agent:
+        host: 'localhost' #主机地址
+        port: 9000 # 端口号
+        id: 'agent-e75b6e5f-0222-47f7-99da-3fdddea7cbe1' #letta server运行的Agent的id编号
+        faster_first_response: True
+        # 句子分割方法：'regex' 或 'pysbd'
+        segment_method: 'pysbd'
+        # 一旦选择letta作为agent，那么实际运行时候的llm是在letta上配置的，因此用户需要自己运行letta server
+        # 有关更多详细信息，请查看他们的文档
+
+    llm_configs: {}
+
+  # === 自动语音识别 ===
+  asr_config:
+    asr_model: 'sherpa_onnx_asr' # 使用的语音识别模型
+
+    sherpa_onnx_asr:
+      model_type: 'sense_voice'
+      sense_voice: './models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.int8.onnx'
+      tokens: './models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt'
+      num_threads: 4 # 线程数
+      use_itn: True # 对 SenseVoice 模型启用 ITN（如果不是 SenseVoice 模型，则应设置为 False）
+      provider: 'cpu'
+
+  # =================== 文本转语音 ===================
+  tts_config:
+    tts_model: 'edge_tts' # 使用的文本转语音模型
+
+    edge_tts:
+      # 查看文档：https://github.com/rany2/edge-tts
+      # 使用 `edge-tts --list-voices` 列出所有可用语音
+      voice: zh-CN-XiaoxiaoNeural # 'en-US-AvaMultilingualNeural' #'zh-CN-XiaoxiaoNeural' # 'ja-JP-NanamiNeural'
+
+  # =================== Voice Activity Detection ===================
+  vad_config:
+    vad_model: null
+
+  tts_preprocessor_config:
+    # 关于进入 TTS 的文本预处理的设置
+
+    remove_special_char: True # 从音频生成中删除表情符号等特殊字符
+    ignore_brackets: True # 从音频生成中删除中括号包住的内容
+    ignore_parentheses: True # 从音频生成中删除括号包住的内容
+    ignore_asterisks: True # 从音频生成中删除星号包住的内容(单双星号)
+    ignore_angle_brackets: True # 从音频生成中删除尖括号包住的内容
+
+    translator_config:
+      translate_audio: False # 警告：请确保翻译引擎配置成功再开启此选项，否则会翻译失败
+      translate_provider: 'deeplx' # 翻译提供商, 目前支持 deeplx 或 tencent
+
+# 直播平台集成
+live_config:
+  bilibili_live:
+    # 要监控的B站直播间ID列表（直播间URL中的数字）
+    room_ids: [1991478060]
+    # SESSDATA cookie值（可选，用于认证请求，可以查看发送弹幕用户名）
+    sessdata: ''

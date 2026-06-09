@@ -1,6 +1,3 @@
-# ignore the user configuration file
-conf.yaml
-
 # ignore non-default background images
 /backgrounds/*
 !/backgrounds/README.md

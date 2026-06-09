@@ -1,4 +1,4 @@
-# Git metadata from nested repositories kept only as local backups.
+# Nested Git metadata.
 .embedded-git-backups/
 **/.git
 **/.git/
@@ -20,7 +20,6 @@
 *credential*
 *token*
 *api_keys*
-Open_LLM_Vtuber/conf.yaml
 Open_LLM_Vtuber/conf.yaml.backup
 Open_LLM_Vtuber/mcp_servers.json
 Open_LLM_Vtuber/src/open_llm_vtuber/llm/user_credentials.json
@@ -43,9 +42,9 @@ Open_LLM_Vtuber/models/
 Open_LLM_Vtuber/avatars/
 Open_LLM_Vtuber/live2d-models/*
 !Open_LLM_Vtuber/live2d-models/mao_pro/
-!Open_LLM_Vtuber/live2d-models/shizuku/
 Open_LLM_Vtuber/backgrounds/*
 !Open_LLM_Vtuber/backgrounds/README.md
 
 # Local Letta data backups.
+Letta/
 备份Letta/
