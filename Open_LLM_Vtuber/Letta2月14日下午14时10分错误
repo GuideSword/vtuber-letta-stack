@@ -1,0 +1,8 @@
+INFO:     ::1:7953 - "POST /v1/agents/ HTTP/1.1" 200 OK
+D:\ChatWithSmallC\Letta\venv\lib\site-packages\letta\agent.py:127: UserWarning: Tool rules only work reliably for model backends that support structured outputs (e.g. OpenAI gpt-4o).
+  warnings.warn("Tool rules only work reliably for model backends that support structured outputs (e.g. OpenAI gpt-4o).")
+httpx - INFO - HTTP Request: POST http://localhost:11434/v1/chat/completions "HTTP/1.1 200 OK"
+Letta.letta.llm_api.openai - INFO - Finally ending streaming interface.
+D:\ChatWithSmallC\Letta\venv\lib\site-packages\letta\llm_api\helpers.py:285: UserWarning: Overwriting existing inner monologue () with kwarg (Welcome new human. Ready for the first introduction.)
+  warnings.warn(f"Overwriting existing inner monologue ({new_choice.message.content}) with kwarg ({inner_thoughts})")
+Letta.letta.agent - INFO - last response total_tokens (1796) < 6144.0
