@@ -187,6 +187,16 @@ class ServiceContext:
                 "MCP components not initialized (use_mcpp is False or no enabled servers)."
             )
 
+    def _get_mcp_settings(self, agent_config: AgentConfig) -> tuple[bool, list[str]]:
+        basic_memory_agent = agent_config.agent_settings.basic_memory_agent
+        if not basic_memory_agent:
+            return False, []
+
+        return (
+            bool(basic_memory_agent.use_mcpp),
+            basic_memory_agent.mcp_enabled_servers or [],
+        )
+
     async def close(self):
         """Clean up resources, especially the MCPClient."""
         logger.info("Closing ServiceContext resources...")
@@ -238,11 +248,12 @@ class ServiceContext:
         self.send_text = send_text
         self.client_uid = client_uid
 
-        # Initialize session-specific MCP components
-        await self._init_mcp_components(
-            self.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
-            self.character_config.agent_config.agent_settings.basic_memory_agent.mcp_enabled_servers,
+        use_mcpp, mcp_enabled_servers = self._get_mcp_settings(
+            self.character_config.agent_config
         )
+
+        # Initialize session-specific MCP components
+        await self._init_mcp_components(use_mcpp, mcp_enabled_servers)
 
         logger.debug(f"Loaded service context with cache: {character_config}")
 
@@ -277,11 +288,12 @@ class ServiceContext:
         # init vad from character config
         self.init_vad(config.character_config.vad_config)
 
+        use_mcpp, mcp_enabled_servers = self._get_mcp_settings(
+            config.character_config.agent_config
+        )
+
         # Initialize shared ToolAdapter if it doesn't exist yet
-        if (
-            not self.tool_adapter
-            and config.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp
-        ):
+        if not self.tool_adapter and use_mcpp:
             if not self.mcp_server_registery:
                 logger.info(
                     "Initializing shared ServerRegistry within load_from_config."
@@ -291,10 +303,7 @@ class ServiceContext:
             self.tool_adapter = ToolAdapter(server_registery=self.mcp_server_registery)
 
         # Initialize MCP Components before initializing Agent
-        await self._init_mcp_components(
-            config.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
-            config.character_config.agent_config.agent_settings.basic_memory_agent.mcp_enabled_servers,
-        )
+        await self._init_mcp_components(use_mcpp, mcp_enabled_servers)
 
         # init agent from character config
         await self.init_agent(
