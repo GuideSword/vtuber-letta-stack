@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import os
+import json
+import shutil
+import subprocess
+from typing import Any, Callable
+
+from .models import PreflightResult
+
+
+Runner = Callable[[list[str], int], subprocess.CompletedProcess[str]]
+
+
+def _default_runner(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+    )
+
+
+class OpenClawCLI:
+    def __init__(
+        self,
+        command: str | None = None,
+        browser_profile: str | None = None,
+        timeout_seconds: int | None = None,
+        runner: Runner | None = None,
+    ) -> None:
+        raw_command = command or os.environ.get("OPENCLAW_COMMAND", "openclaw")
+        self.command = raw_command if runner is not None else self._resolve_command(raw_command)
+        self.browser_profile = browser_profile or os.environ.get("OPENCLAW_BROWSER_PROFILE", "openclaw")
+        self.timeout_seconds = int(timeout_seconds or os.environ.get("OPENCLAW_TIMEOUT_SECONDS", "30"))
+        self.runner = runner or _default_runner
+
+    def preflight(self) -> PreflightResult:
+        node = self._run(["node", "-v"])
+        node_version = node.stdout.strip() if node.returncode == 0 else None
+        if not node_version or not self._node_is_supported(node_version):
+            return PreflightResult(
+                ready=False,
+                node_version=node_version,
+                openclaw_available=False,
+                browser_available=False,
+                message=f"OpenClaw requires Node 22.19+; current node is {node_version or 'unavailable'}.",
+                details={"stderr": node.stderr[-1000:]},
+            )
+
+        version = self._run([self.command, "--version"])
+        if version.returncode != 0:
+            return PreflightResult(
+                ready=False,
+                node_version=node_version,
+                openclaw_available=False,
+                browser_available=False,
+                message="OpenClaw CLI is not available.",
+                details={"stdout": version.stdout[-1000:], "stderr": version.stderr[-1000:]},
+            )
+
+        doctor = self._run(self._browser_base(json_output=True) + ["doctor"])
+        if doctor.returncode != 0 or not self._doctor_is_ok(doctor.stdout):
+            return PreflightResult(
+                ready=False,
+                node_version=node_version,
+                openclaw_available=True,
+                browser_available=False,
+                message="OpenClaw Browser preflight failed.",
+                details={"stdout": doctor.stdout[-1000:], "stderr": doctor.stderr[-1000:]},
+            )
+
+        return PreflightResult(
+            ready=True,
+            node_version=node_version,
+            openclaw_available=True,
+            browser_available=True,
+            message="OpenClaw Browser is ready.",
+            details={"stdout": doctor.stdout[-1000:], "openclaw_version": version.stdout.strip()},
+        )
+
+    def run_browser_action(self, action: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        command = self._build_browser_command(action, arguments)
+        result = self._run(command)
+        return {
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "command": self._sanitize_command(command, action),
+        }
+
+    def _build_browser_command(self, action: str, arguments: dict[str, Any]) -> list[str]:
+        base = self._browser_base()
+        if action == "browser_open":
+            return base + ["open", str(arguments["url"])]
+        if action == "browser_snapshot":
+            command = self._browser_base(json_output=bool(arguments.get("json", True))) + ["snapshot"]
+            if arguments.get("urls"):
+                command.append("--urls")
+            return command
+        if action == "browser_screenshot":
+            command = base + ["screenshot"]
+            if arguments.get("full_page"):
+                command.append("--full-page")
+            if arguments.get("labels"):
+                command.append("--labels")
+            if arguments.get("ref"):
+                command += ["--ref", str(arguments["ref"])]
+            if arguments.get("path") or arguments.get("output_path"):
+                command += ["--out", str(arguments.get("path") or arguments.get("output_path"))]
+            return command
+        if action == "browser_click":
+            return base + ["click", self._ref(arguments)]
+        if action == "browser_type":
+            return base + ["type", self._ref(arguments), str(arguments["text"])]
+        if action == "browser_wait":
+            command = base + ["wait"]
+            if arguments.get("text"):
+                command += ["--text", str(arguments["text"])]
+            elif arguments.get("timeout_ms"):
+                command += ["--timeout-ms", str(arguments["timeout_ms"])]
+            return command
+        raise ValueError(f"Unsupported browser action: {action}")
+
+    def _browser_base(self, json_output: bool = False) -> list[str]:
+        command = [self.command, "browser", "--browser-profile", self.browser_profile]
+        if json_output:
+            command.append("--json")
+        return command
+
+    def _resolve_command(self, command: str) -> str:
+        return shutil.which(command) or command
+
+    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        try:
+            return self.runner(args, self.timeout_seconds)
+        except FileNotFoundError as exc:
+            return subprocess.CompletedProcess(args, 127, stdout="", stderr=str(exc))
+        except subprocess.TimeoutExpired as exc:
+            return subprocess.CompletedProcess(args, 124, stdout=exc.stdout or "", stderr=exc.stderr or "Timed out")
+
+    def _ref(self, arguments: dict[str, Any]) -> str:
+        ref = arguments.get("ref") or arguments.get("selector")
+        if not ref:
+            raise ValueError("Browser ref is required.")
+        return str(ref)
+
+    def _node_is_supported(self, version: str) -> bool:
+        clean = version.strip().lstrip("v")
+        parts = clean.split(".")
+        try:
+            major = int(parts[0])
+            minor = int(parts[1]) if len(parts) > 1 else 0
+        except (IndexError, ValueError):
+            return False
+        return major > 22 or (major == 22 and minor >= 19)
+
+    def _doctor_is_ok(self, stdout: str) -> bool:
+        stripped = stdout.strip()
+        if not stripped:
+            return True
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            return True
+        return bool(payload.get("ok", True))
+
+    def _sanitize_command(self, command: list[str], action: str) -> list[str]:
+        sanitized = list(command)
+        if action == "browser_type" and sanitized:
+            sanitized[-1] = "[REDACTED]"
+        for index, item in enumerate(sanitized[:-1]):
+            if item in {"--text", "--password", "--token", "--credentials"}:
+                sanitized[index + 1] = "[REDACTED]"
+        return sanitized

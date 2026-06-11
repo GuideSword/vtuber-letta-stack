@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `letta_agent` as the active conversation agent. Add a small `open_llm_vtuber.computer_control` package that owns policy, approvals, audit logging, OpenClaw CLI execution, and a CLI entrypoint. Add a script that registers one Letta tool which calls this local bridge; the Letta database remains local state and is not committed.
 
-**Tech Stack:** Python 3.10+, standard library `argparse`, `dataclasses`, `json`, `subprocess`, existing `requests`, existing `letta-client`, OpenClaw CLI, Node 22+ selected by `nvm`.
+**Tech Stack:** Python 3.10+, standard library `argparse`, `dataclasses`, `json`, `subprocess`, existing `requests`, existing `letta-client`, OpenClaw CLI, Node 22.19+ selected by `nvm`.
 
 ---
 
@@ -830,7 +830,7 @@ class OpenClawCLITests(unittest.TestCase):
         cli = OpenClawCLI(command="openclaw", runner=runner)
         result = cli.preflight()
         self.assertFalse(result.ready)
-        self.assertIn("Node 22.12+", result.message)
+        self.assertIn("Node 22.19+", result.message)
 
     def test_browser_open_command_shape(self):
         calls = []
@@ -904,10 +904,10 @@ class OpenClawCLI:
                 node_version=node_version,
                 openclaw_available=False,
                 browser_available=False,
-                message=f"OpenClaw requires Node 22.12+; current node is {node_version or 'unavailable'}.",
+                message=f"OpenClaw requires Node 22.19+; current node is {node_version or 'unavailable'}.",
             )
 
-        doctor = self.runner([self.command, "browser", "doctor", "--browser-profile", self.browser_profile, "--json"], self.timeout_seconds)
+        doctor = self._run(self._browser_base(json_output=True) + ["doctor"])
         if doctor.returncode != 0:
             return PreflightResult(
                 ready=False,
@@ -1416,6 +1416,24 @@ def upsert_tool(base_url: str, source_code: str) -> dict:
             "source_type": "python",
             "description": "Safely request local OpenClaw-first browser/computer control through ChatWithSmallC policy, approval, and audit layers.",
             "tags": ["chatwithsmallc", "computer_control", "openclaw"],
+            "json_schema": {
+                "name": TOOL_NAME,
+                "description": "Safely request local OpenClaw-first browser/computer control through ChatWithSmallC policy, approval, and audit layers.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "Action to run, such as preflight, approval_status, or a browser_* action.",
+                        },
+                        "arguments_json": {
+                            "type": "string",
+                            "description": "JSON object string with action arguments. Use OpenClaw snapshot refs for click/type.",
+                        },
+                    },
+                    "required": ["action"],
+                },
+            },
             "return_char_limit": 6000,
         },
         timeout=30,
