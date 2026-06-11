@@ -25,6 +25,7 @@ Open_LLM_Vtuber/mcp_servers.json
 Open_LLM_Vtuber/src/open_llm_vtuber/llm/user_credentials.json
 
 # Generated/runtime data.
+.run_logs/
 **/logs/
 **/*.log
 **/cache/

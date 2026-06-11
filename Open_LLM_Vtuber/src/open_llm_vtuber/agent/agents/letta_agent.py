@@ -74,7 +74,7 @@ class LettaAgent(AgentInterface):
             stream = self.client.agents.messages.create_stream(
                 agent_id=self.id,
                 messages=messages,
-                stream_tokens=True,
+                stream_tokens=False,
             )
 
             complete_response = ""
