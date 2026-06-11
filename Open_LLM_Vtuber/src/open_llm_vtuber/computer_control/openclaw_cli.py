@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import json
+import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Callable
 
 from .models import PreflightResult
@@ -85,12 +87,17 @@ class OpenClawCLI:
     def run_browser_action(self, action: str, arguments: dict[str, Any]) -> dict[str, Any]:
         command = self._build_browser_command(action, arguments)
         result = self._run(command)
-        return {
+        stdout = self._clean_output(result.stdout)
+        stderr = self._clean_output(result.stderr)
+        payload = {
             "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "stdout": stdout,
+            "stderr": stderr,
             "command": self._sanitize_command(command, action),
         }
+        if action == "browser_screenshot" and result.returncode == 0:
+            payload.update(self._handle_screenshot_output(stdout, arguments))
+        return payload
 
     def _build_browser_command(self, action: str, arguments: dict[str, Any]) -> list[str]:
         base = self._browser_base()
@@ -109,8 +116,6 @@ class OpenClawCLI:
                 command.append("--labels")
             if arguments.get("ref"):
                 command += ["--ref", str(arguments["ref"])]
-            if arguments.get("path") or arguments.get("output_path"):
-                command += ["--out", str(arguments.get("path") or arguments.get("output_path"))]
             return command
         if action == "browser_click":
             return base + ["click", self._ref(arguments)]
@@ -147,6 +152,53 @@ class OpenClawCLI:
         if not ref:
             raise ValueError("Browser ref is required.")
         return str(ref)
+
+    def _handle_screenshot_output(self, stdout: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        openclaw_path = self._extract_screenshot_path(stdout)
+        payload: dict[str, Any] = {}
+        if openclaw_path:
+            payload["openclaw_screenshot_path"] = str(openclaw_path)
+
+        requested_path = arguments.get("path") or arguments.get("output_path")
+        if requested_path and openclaw_path and openclaw_path.exists():
+            destination = Path(str(requested_path)).expanduser().resolve()
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(openclaw_path, destination)
+            payload["screenshot_path"] = str(destination)
+        elif requested_path:
+            payload["screenshot_path_error"] = "OpenClaw screenshot path was not found in command output."
+        return payload
+
+    def _extract_screenshot_path(self, stdout: str) -> Path | None:
+        for line in reversed(stdout.splitlines()):
+            candidate = line.strip()
+            if not candidate.lower().endswith(".png"):
+                continue
+            match = re.search(r"(~[\\/][^\s]+\.png|[A-Za-z]:[\\/][^\s]+\.png)", candidate)
+            if not match:
+                continue
+            value = match.group(1)
+            return Path(value).expanduser().resolve()
+        return None
+
+    def _clean_output(self, text: str) -> str:
+        lines = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped in {"|"} or stripped.startswith(("+", "|")):
+                continue
+            if stripped.startswith("o  Config warnings"):
+                continue
+            if stripped.startswith("Config warnings:"):
+                continue
+            if stripped.startswith("- plugins.entries.openclaw-weixin"):
+                continue
+            if stripped.startswith("[channels] failed to load bundled channel setup entry"):
+                continue
+            lines.append(line)
+        return "\n".join(lines) + ("\n" if lines else "")
 
     def _node_is_supported(self, version: str) -> bool:
         clean = version.strip().lstrip("v")

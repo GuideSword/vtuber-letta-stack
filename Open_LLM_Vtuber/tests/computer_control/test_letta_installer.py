@@ -22,6 +22,7 @@ class LettaInstallerTests(unittest.TestCase):
         self.assertIn("PYTHONPATH", source)
         self.assertIn("json.dumps", source)
         self.assertIn("approval_required", source)
+        self.assertIn("explicit_arguments", source)
         self.assertNotIn("sk-", source)
 
     def test_tool_payload_uses_openclaw_tags(self):
@@ -31,6 +32,8 @@ class LettaInstallerTests(unittest.TestCase):
         self.assertEqual(payload["source_type"], "python")
         self.assertEqual(payload["json_schema"]["name"], "computer_control")
         self.assertIn("action", payload["json_schema"]["parameters"]["required"])
+        self.assertIn("url", payload["json_schema"]["parameters"]["properties"])
+        self.assertIn("ref", payload["json_schema"]["parameters"]["properties"])
         self.assertIn("computer_control", payload["tags"])
         self.assertIn("openclaw", payload["tags"])
 

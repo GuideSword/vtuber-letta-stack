@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 from .approvals import ApprovalStore
@@ -52,7 +53,7 @@ def _handle_command(args: argparse.Namespace) -> dict:
         return ComputerControlBridge().preflight()
 
     if args.command == "execute":
-        arguments = json.loads(args.arguments_json)
+        arguments = _load_arguments(args.arguments_json)
         result = ComputerControlBridge().execute(args.action, arguments, requested_by=args.requested_by)
         return result.to_dict()
 
@@ -67,6 +68,88 @@ def _handle_command(args: argparse.Namespace) -> dict:
         return store.set_status(args.approval_id, "denied").__dict__
 
     raise ValueError(f"Unsupported command: {args.command}")
+
+
+def _load_arguments(raw: str) -> dict:
+    try:
+        return json.loads(raw or "{}")
+    except json.JSONDecodeError as exc:
+        loose = _parse_loose_arguments(raw or "")
+        if loose is None:
+            raise exc
+        return loose
+
+
+def _parse_loose_arguments(raw: str) -> dict | None:
+    text = raw.strip()
+    if not text.startswith("{") or not text.endswith("}"):
+        return None
+
+    body = text[1:-1].strip()
+    if not body:
+        return {}
+
+    parsed = {}
+    for pair in _split_loose_pairs(body):
+        key, separator, value = pair.partition(":")
+        if not separator:
+            return None
+        key = key.strip().strip("\"'")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            return None
+        parsed[key] = _coerce_loose_value(value.strip())
+    return parsed
+
+
+def _split_loose_pairs(body: str) -> list[str]:
+    pairs = []
+    current = []
+    quote = None
+    escape = False
+    for character in body:
+        if escape:
+            current.append(character)
+            escape = False
+            continue
+        if character == "\\":
+            current.append(character)
+            escape = True
+            continue
+        if quote:
+            current.append(character)
+            if character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            current.append(character)
+            quote = character
+            continue
+        if character == ",":
+            pairs.append("".join(current).strip())
+            current = []
+            continue
+        current.append(character)
+    pairs.append("".join(current).strip())
+    return pairs
+
+
+def _coerce_loose_value(value: str) -> object:
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
+        return cleaned[1:-1]
+
+    lowered = cleaned.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered == "null":
+        return None
+    if re.fullmatch(r"-?\d+", cleaned):
+        return int(cleaned)
+    if re.fullmatch(r"-?\d+\.\d+", cleaned):
+        return float(cleaned)
+    return cleaned
 
 
 if __name__ == "__main__":

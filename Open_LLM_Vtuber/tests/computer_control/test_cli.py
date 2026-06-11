@@ -5,8 +5,18 @@ import sys
 import tempfile
 import unittest
 
+from open_llm_vtuber.computer_control.cli import _load_arguments
+
 
 class ComputerControlCLITests(unittest.TestCase):
+    def test_load_arguments_accepts_common_loose_object_format(self):
+        arguments = _load_arguments("{url:https://example.com,seconds:2,purpose:payment}")
+
+        self.assertEqual(
+            arguments,
+            {"url": "https://example.com", "seconds": 2, "purpose": "payment"},
+        )
+
     def test_approval_status_outputs_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env = dict(os.environ)

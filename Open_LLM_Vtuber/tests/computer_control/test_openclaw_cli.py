@@ -1,5 +1,7 @@
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 from open_llm_vtuber.computer_control.openclaw_cli import OpenClawCLI
 
@@ -78,6 +80,37 @@ class OpenClawCLITests(unittest.TestCase):
         cli = OpenClawCLI(command="openclaw", browser_profile="openclaw", runner=runner)
         output = cli.run_browser_action("browser_type", {"ref": "e12", "text": "secret"})
         self.assertEqual(output["command"][-1], "[REDACTED]")
+
+    def test_screenshot_copies_openclaw_output_to_requested_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "source.png"
+            destination = Path(temp_dir) / "copy.png"
+            source.write_bytes(b"png")
+
+            def runner(args, timeout):
+                return subprocess.CompletedProcess(args, 0, stdout=str(source), stderr="")
+
+            cli = OpenClawCLI(command="openclaw", browser_profile="openclaw", runner=runner)
+            output = cli.run_browser_action("browser_screenshot", {"path": str(destination)})
+
+            self.assertEqual(output["command"], ["openclaw", "browser", "--browser-profile", "openclaw", "screenshot"])
+            self.assertEqual(output["screenshot_path"], str(destination.resolve()))
+            self.assertEqual(destination.read_bytes(), b"png")
+
+    def test_output_cleaning_removes_openclaw_config_warning_noise(self):
+        def runner(args, timeout):
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout="|\n+---+\nopened: https://example.com/\ntab: t1\n",
+                stderr="Config warnings:\n- plugins.entries.openclaw-weixin: plugin disabled\n[channels] failed to load bundled channel setup entry imessage\n",
+            )
+
+        cli = OpenClawCLI(command="openclaw", browser_profile="openclaw", runner=runner)
+        output = cli.run_browser_action("browser_open", {"url": "https://example.com"})
+
+        self.assertEqual(output["stdout"], "opened: https://example.com/\ntab: t1\n")
+        self.assertEqual(output["stderr"], "")
 
 
 if __name__ == "__main__":

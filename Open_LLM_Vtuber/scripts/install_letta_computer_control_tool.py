@@ -17,19 +17,54 @@ TOOL_DESCRIPTION = (
 def build_tool_source(python_exe: str, project_root: str) -> str:
     source_path = str(Path(project_root) / "src")
     return f'''
-def computer_control(action: str, arguments_json: str = "{{}}") -> str:
+def computer_control(
+    action: str,
+    arguments_json: str = "{{}}",
+    url: str = "",
+    ref: str = "",
+    text: str = "",
+    path: str = "",
+    output_path: str = "",
+    seconds: int = 0,
+    purpose: str = "",
+    approval_id: str = "",
+) -> str:
     """
     Safely request a local computer-control action through the ChatWithSmallC bridge.
 
     Supported first-version actions: preflight, approval_status, browser_open,
     browser_snapshot, browser_screenshot, browser_click, browser_type, browser_wait.
-    For click/type, prefer OpenClaw snapshot refs. If the result says
+    Prefer explicit fields such as url, ref, text, path, and seconds over
+    hand-written JSON. For click/type, prefer OpenClaw snapshot refs. If the result says
     approval_required, ask the user for approval instead of retrying.
     Never use this to extract credentials, cookies, tokens, or hidden browser state.
     """
     import json
     import os
     import subprocess
+
+    explicit_arguments = {{}}
+    for key, value in {{
+        "url": url,
+        "ref": ref,
+        "text": text,
+        "path": path,
+        "output_path": output_path,
+        "seconds": seconds,
+        "purpose": purpose,
+        "approval_id": approval_id,
+    }}.items():
+        if value not in (None, "", 0):
+            explicit_arguments[key] = value
+
+    command_arguments_json = arguments_json or "{{}}"
+    if explicit_arguments:
+        try:
+            parsed_arguments = json.loads(command_arguments_json) if command_arguments_json else {{}}
+        except Exception:
+            parsed_arguments = {{}}
+        parsed_arguments.update(explicit_arguments)
+        command_arguments_json = json.dumps(parsed_arguments, ensure_ascii=False)
 
     env = dict(os.environ)
     env["PYTHONPATH"] = r"{source_path}" + os.pathsep + env.get("PYTHONPATH", "")
@@ -41,7 +76,7 @@ def computer_control(action: str, arguments_json: str = "{{}}") -> str:
             "execute",
             action,
             "--arguments-json",
-            arguments_json,
+            command_arguments_json,
             "--requested-by",
             "letta",
         ],
@@ -83,7 +118,39 @@ def tool_payload(source_code: str) -> dict:
                     },
                     "arguments_json": {
                         "type": "string",
-                        "description": "JSON object string with action arguments. Use OpenClaw snapshot refs for click/type.",
+                        "description": "Optional JSON object string with action arguments. Prefer explicit fields when possible.",
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "URL for browser_open. Must be http or https.",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "OpenClaw snapshot ref for browser_click or browser_type.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type for browser_type.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Requested local destination path for browser_screenshot.",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Alias for path when saving a browser_screenshot.",
+                    },
+                    "seconds": {
+                        "type": "integer",
+                        "description": "Seconds for browser_wait.",
+                    },
+                    "purpose": {
+                        "type": "string",
+                        "description": "Short reason for risky actions such as payment, login, or submission.",
+                    },
+                    "approval_id": {
+                        "type": "string",
+                        "description": "Approval id supplied after the user approves a risky action.",
                     },
                 },
                 "required": ["action"],

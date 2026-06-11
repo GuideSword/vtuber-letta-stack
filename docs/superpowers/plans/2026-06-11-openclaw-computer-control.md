@@ -945,8 +945,7 @@ class OpenClawCLI:
         if action == "browser_snapshot":
             return base + ["snapshot"] + profile + ["--json"]
         if action == "browser_screenshot":
-            path = str(arguments.get("path", ""))
-            return base + ["screenshot"] + profile + (["--path", path] if path else [])
+            return base + ["screenshot"] + profile
         if action == "browser_click":
             return base + ["click"] + profile + ["--selector", str(arguments["selector"])]
         if action == "browser_type":
