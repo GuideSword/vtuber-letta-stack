@@ -37,6 +37,44 @@ class LettaToolFormatterTests(unittest.TestCase):
 
         self.assertEqual(format_tool_return_for_user(json.dumps(payload)), "这个操作需要你确认后才能继续。审批编号：approval-123。")
 
+    def test_formats_shopping_search_prices(self):
+        payload = {
+            "status": "ok",
+            "action": "shopping_search",
+            "message": "已在淘宝搜索",
+            "data": {
+                "site": "taobao",
+                "query": "mac book",
+                "prices": ["¥9999", "¥12999"],
+                "screenshot_path": r"D:\ChatWithSmallC\Open_LLM_Vtuber\.run_logs\computer_control\taobao.png",
+            },
+        }
+
+        text = format_tool_return_for_user(json.dumps(payload))
+
+        self.assertIn("我在淘宝搜索了“mac book”", text)
+        self.assertIn("¥9999", text)
+        self.assertIn("截图已保存到", text)
+
+    def test_formats_shopping_search_login_required(self):
+        payload = {
+            "status": "ok",
+            "action": "shopping_search",
+            "message": "已在淘宝搜索",
+            "data": {
+                "site": "taobao",
+                "query": "mac book",
+                "prices": [],
+                "login_required": True,
+                "screenshot_path": r"D:\ChatWithSmallC\Open_LLM_Vtuber\.run_logs\computer_control\taobao.png",
+            },
+        }
+
+        text = format_tool_return_for_user(json.dumps(payload))
+
+        self.assertIn("要求登录或重新登录", text)
+        self.assertIn("截图已保存到", text)
+
     def test_ignores_unrelated_json(self):
         self.assertIsNone(format_tool_return_for_user('{"foo": "bar"}'))
 

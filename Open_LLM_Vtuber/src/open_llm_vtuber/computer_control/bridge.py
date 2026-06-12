@@ -19,6 +19,8 @@ BROWSER_ACTIONS = {
     "browser_wait",
 }
 
+SHOPPING_ACTIONS = {"shopping_search"}
+
 
 class ComputerControlBridge:
     def __init__(
@@ -79,7 +81,7 @@ class ComputerControlBridge:
             self._audit(request_id, action, policy_result.decision.value, policy_result.sanitized_arguments, result)
             return result
 
-        if action not in BROWSER_ACTIONS:
+        if action not in BROWSER_ACTIONS and action not in SHOPPING_ACTIONS:
             result = ActionResult(
                 ResultStatus.UNAVAILABLE,
                 action,
@@ -90,7 +92,10 @@ class ComputerControlBridge:
             return result
 
         try:
-            output = self.openclaw.run_browser_action(action, args)
+            if action in SHOPPING_ACTIONS:
+                output = self.openclaw.run_shopping_search(args)
+            else:
+                output = self.openclaw.run_browser_action(action, args)
             if output["returncode"] == 0:
                 result = ActionResult(ResultStatus.OK, action, output["stdout"] or "Action completed.", request_id, data=output)
             else:

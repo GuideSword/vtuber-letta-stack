@@ -10,6 +10,11 @@ from .bridge import ComputerControlBridge
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(prog="computer-control")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -33,18 +38,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         payload = _handle_command(args)
     except json.JSONDecodeError as exc:
-        print(json.dumps({"status": "error", "message": f"Invalid arguments JSON: {exc}"}, ensure_ascii=False))
+        print(json.dumps({"status": "error", "message": f"Invalid arguments JSON: {exc}"}, ensure_ascii=True))
         return 2
     except Exception as exc:
         print(
             json.dumps(
                 {"status": "error", "message": str(exc), "error_class": exc.__class__.__name__},
-                ensure_ascii=False,
+                ensure_ascii=True,
             )
         )
         return 1
 
-    print(json.dumps(payload, ensure_ascii=False))
+    print(json.dumps(payload, ensure_ascii=True))
     return 0
 
 

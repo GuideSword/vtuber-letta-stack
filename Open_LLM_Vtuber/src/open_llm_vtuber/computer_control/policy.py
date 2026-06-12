@@ -90,6 +90,9 @@ class ComputerControlPolicy:
         if action == "browser_open":
             return self._classify_browser_open(args, sanitized)
 
+        if action == "shopping_search":
+            return self._classify_shopping_search(args, sanitized)
+
         if action in MUTATING_BROWSER_ACTIONS:
             return self._classify_browser_mutation(action, args, sanitized)
 
@@ -133,6 +136,15 @@ class ComputerControlPolicy:
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             return PolicyResult(PolicyDecision.ALLOW, "Safe browser navigation.", "low", sanitized)
         return PolicyResult(PolicyDecision.DENY, "Only http(s) browser navigation is allowed.", "high", sanitized)
+
+    def _classify_shopping_search(self, arguments: dict[str, Any], sanitized: dict[str, Any]) -> PolicyResult:
+        site = str(arguments.get("site", "")).lower()
+        query = str(arguments.get("query", "")).strip()
+        if site not in {"taobao", "jd", "jingdong"}:
+            return PolicyResult(PolicyDecision.DENY, "Shopping search only supports taobao and jd.", "high", sanitized)
+        if not query:
+            return PolicyResult(PolicyDecision.DENY, "Shopping search requires a query.", "high", sanitized)
+        return PolicyResult(PolicyDecision.ALLOW, "Shopping search opens a public search results page.", "low", sanitized)
 
     def _classify_screenshot(self, arguments: dict[str, Any], sanitized: dict[str, Any]) -> PolicyResult:
         output_path = arguments.get("path") or arguments.get("output_path")

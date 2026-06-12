@@ -23,6 +23,14 @@ class ComputerControlPolicyTests(unittest.TestCase):
         result = self.policy.classify("browser_open", {"url": "https://example.com"})
         self.assertEqual(result.decision, PolicyDecision.ALLOW)
 
+    def test_shopping_search_allows_supported_sites(self):
+        result = self.policy.classify("shopping_search", {"site": "taobao", "query": "mac book"})
+        self.assertEqual(result.decision, PolicyDecision.ALLOW)
+
+    def test_shopping_search_denies_unsupported_sites(self):
+        result = self.policy.classify("shopping_search", {"site": "unknown", "query": "mac book"})
+        self.assertEqual(result.decision, PolicyDecision.DENY)
+
     def test_non_http_navigation_is_denied(self):
         result = self.policy.classify("browser_open", {"url": "file:///C:/Users/sword/secrets.txt"})
         self.assertEqual(result.decision, PolicyDecision.DENY)

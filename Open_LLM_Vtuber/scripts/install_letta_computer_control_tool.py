@@ -23,6 +23,8 @@ def computer_control(
     url: str = "",
     ref: str = "",
     text: str = "",
+    site: str = "",
+    query: str = "",
     path: str = "",
     output_path: str = "",
     seconds: int = 0,
@@ -33,8 +35,11 @@ def computer_control(
     Safely request a local computer-control action through the ChatWithSmallC bridge.
 
     Supported first-version actions: preflight, approval_status, browser_open,
-    browser_snapshot, browser_screenshot, browser_click, browser_type, browser_wait.
-    Prefer explicit fields such as url, ref, text, path, and seconds over
+    browser_snapshot, browser_screenshot, browser_click, browser_type, browser_wait,
+    and shopping_search.
+    For shopping or price lookup requests such as "search Taobao for MacBook price", use
+    action="shopping_search" with explicit fields site and query. Prefer explicit
+    fields such as url, ref, text, site, query, path, and seconds over
     hand-written JSON. For click/type, prefer OpenClaw snapshot refs. If the result says
     approval_required, ask the user for approval instead of retrying.
     Never use this to extract credentials, cookies, tokens, or hidden browser state.
@@ -48,6 +53,8 @@ def computer_control(
         "url": url,
         "ref": ref,
         "text": text,
+        "site": site,
+        "query": query,
         "path": path,
         "output_path": output_path,
         "seconds": seconds,
@@ -64,10 +71,11 @@ def computer_control(
         except Exception:
             parsed_arguments = {{}}
         parsed_arguments.update(explicit_arguments)
-        command_arguments_json = json.dumps(parsed_arguments, ensure_ascii=False)
+        command_arguments_json = json.dumps(parsed_arguments, ensure_ascii=True)
 
     env = dict(os.environ)
     env["PYTHONPATH"] = r"{source_path}" + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONIOENCODING"] = "utf-8"
     result = subprocess.run(
         [
             r"{python_exe}",
@@ -84,13 +92,15 @@ def computer_control(
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=60,
         check=False,
     )
     if result.returncode != 0:
         return json.dumps(
             {{"status": "error", "message": result.stderr[-1000:] or result.stdout[-1000:]}},
-            ensure_ascii=False,
+            ensure_ascii=True,
         )
     return result.stdout
 '''
@@ -113,7 +123,8 @@ def tool_payload(source_code: str) -> dict:
                         "description": (
                             "Action to run. First-version actions are preflight, approval_status, "
                             "browser_open, browser_snapshot, browser_screenshot, browser_click, "
-                            "browser_type, and browser_wait."
+                            "browser_type, browser_wait, and shopping_search. Use shopping_search "
+                            "for product price lookup on Taobao or JD."
                         ),
                     },
                     "arguments_json": {
@@ -131,6 +142,14 @@ def tool_payload(source_code: str) -> dict:
                     "text": {
                         "type": "string",
                         "description": "Text to type for browser_type.",
+                    },
+                    "site": {
+                        "type": "string",
+                        "description": "Shopping site for shopping_search. Use taobao or jd.",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Product query for shopping_search, for example mac book.",
                     },
                     "path": {
                         "type": "string",

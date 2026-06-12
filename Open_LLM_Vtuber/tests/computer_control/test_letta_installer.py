@@ -23,7 +23,11 @@ class LettaInstallerTests(unittest.TestCase):
         self.assertIn("json.dumps", source)
         self.assertIn("approval_required", source)
         self.assertIn("explicit_arguments", source)
+        self.assertIn("PYTHONIOENCODING", source)
+        self.assertIn("ensure_ascii=True", source)
+        self.assertIn("shopping_search", source)
         self.assertNotIn("sk-", source)
+        self.assertTrue(source.isascii())
 
     def test_tool_payload_uses_openclaw_tags(self):
         installer = load_installer_module()
@@ -34,6 +38,8 @@ class LettaInstallerTests(unittest.TestCase):
         self.assertIn("action", payload["json_schema"]["parameters"]["required"])
         self.assertIn("url", payload["json_schema"]["parameters"]["properties"])
         self.assertIn("ref", payload["json_schema"]["parameters"]["properties"])
+        self.assertIn("site", payload["json_schema"]["parameters"]["properties"])
+        self.assertIn("query", payload["json_schema"]["parameters"]["properties"])
         self.assertIn("computer_control", payload["tags"])
         self.assertIn("openclaw", payload["tags"])
 

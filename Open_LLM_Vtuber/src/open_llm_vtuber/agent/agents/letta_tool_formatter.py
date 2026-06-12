@@ -48,8 +48,11 @@ def _format_ok(action: str, payload: dict[str, Any], message: str) -> str:
     if action == "browser_snapshot":
         return "已读取当前网页内容。"
     if action == "browser_screenshot":
-        path = (payload.get("data") or {}).get("screenshot_path")
+        data = payload.get("data") or {}
+        path = data.get("screenshot_path") or data.get("openclaw_screenshot_path")
         return f"截图已保存到：{path}。" if path else "截图已完成。"
+    if action == "shopping_search":
+        return _format_shopping_search(payload, message)
     if action == "browser_click":
         return "点击已完成。"
     if action == "browser_type":
@@ -59,6 +62,30 @@ def _format_ok(action: str, payload: dict[str, Any], message: str) -> str:
     if action == "preflight":
         return "电脑控制已就绪。"
     return "操作已完成。"
+
+
+def _format_shopping_search(payload: dict[str, Any], message: str) -> str:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    site = str(data.get("site") or "")
+    query = str(data.get("query") or "")
+    site_name = {"taobao": "淘宝", "jd": "京东", "jingdong": "京东"}.get(site, site or "电商网站")
+    prices = data.get("prices") if isinstance(data.get("prices"), list) else []
+    screenshot_path = data.get("screenshot_path")
+
+    if prices:
+        price_text = "、".join(str(price) for price in prices[:5])
+        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        return f"我在{site_name}搜索了“{query}”，页面里识别到的价格有：{price_text}。{suffix}"
+    if data.get("login_required"):
+        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        return f"我在{site_name}搜索了“{query}”，但页面要求登录或重新登录，所以暂时读不到商品价格。{suffix}"
+    if data.get("loading"):
+        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        return f"我在{site_name}搜索了“{query}”，但商品列表还在加载，暂时读不到价格。{suffix}"
+    if message:
+        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        return f"{message}{suffix}"
+    return f"我已经打开{site_name}搜索“{query}”，但暂时没有读到明确价格。"
 
 
 def _load_payload(tool_return: Any) -> dict[str, Any] | None:

@@ -5,8 +5,10 @@ import json
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import quote_plus
 
 from .models import PreflightResult
 
@@ -99,6 +101,50 @@ class OpenClawCLI:
             payload.update(self._handle_screenshot_output(stdout, arguments))
         return payload
 
+    def run_shopping_search(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        site = str(arguments.get("site", "")).lower()
+        query = str(arguments.get("query", "")).strip()
+        url = self._shopping_search_url(site, query)
+
+        open_result = self.run_browser_action("browser_open", {"url": url})
+        if open_result["returncode"] != 0:
+            return {
+                "returncode": open_result["returncode"],
+                "stdout": "",
+                "stderr": open_result["stderr"],
+                "command": open_result["command"],
+                "site": site,
+                "query": query,
+                "url": url,
+            }
+
+        wait_ms = int(arguments.get("wait_ms") or 6000)
+        time.sleep(max(0, wait_ms) / 1000)
+
+        snapshot_result = self.run_browser_action("browser_snapshot", {})
+        snapshot_payload = self._parse_snapshot(snapshot_result.get("stdout", ""))
+        snapshot_text = snapshot_payload.get("snapshot", "")
+
+        screenshot_path = arguments.get("path") or arguments.get("output_path") or self._default_shopping_screenshot_path(site)
+        screenshot_result = self.run_browser_action("browser_screenshot", {"path": str(screenshot_path)})
+
+        summary = self._summarize_shopping_snapshot(site, query, snapshot_payload, snapshot_text)
+        return {
+            "returncode": 0,
+            "stdout": summary,
+            "stderr": snapshot_result.get("stderr") or screenshot_result.get("stderr") or "",
+            "command": open_result["command"],
+            "site": site,
+            "query": query,
+            "url": url,
+            "prices": self._extract_prices(snapshot_text),
+            "login_required": self._looks_login_required(snapshot_text),
+            "loading": "加载中" in snapshot_text,
+            "snapshot_url": snapshot_payload.get("url"),
+            "snapshot_summary": snapshot_text[:2000],
+            "screenshot_path": screenshot_result.get("screenshot_path") or screenshot_result.get("openclaw_screenshot_path"),
+        }
+
     def _build_browser_command(self, action: str, arguments: dict[str, Any]) -> list[str]:
         base = self._browser_base()
         if action == "browser_open":
@@ -129,6 +175,60 @@ class OpenClawCLI:
                 command += ["--timeout-ms", str(arguments["timeout_ms"])]
             return command
         raise ValueError(f"Unsupported browser action: {action}")
+
+    def _shopping_search_url(self, site: str, query: str) -> str:
+        encoded = quote_plus(query)
+        if site == "taobao":
+            return f"https://s.taobao.com/search?q={encoded}"
+        if site in {"jd", "jingdong"}:
+            return f"https://search.jd.com/Search?keyword={encoded}&enc=utf-8"
+        raise ValueError(f"Unsupported shopping site: {site}")
+
+    def _parse_snapshot(self, stdout: str) -> dict[str, Any]:
+        try:
+            payload = json.loads(stdout)
+        except json.JSONDecodeError:
+            return {"snapshot": stdout}
+        return payload if isinstance(payload, dict) else {"snapshot": stdout}
+
+    def _summarize_shopping_snapshot(
+        self,
+        site: str,
+        query: str,
+        payload: dict[str, Any],
+        snapshot_text: str,
+    ) -> str:
+        site_name = {"taobao": "淘宝", "jd": "京东", "jingdong": "京东"}.get(site, site)
+        prices = self._extract_prices(snapshot_text)
+        if prices:
+            sample = "、".join(prices[:5])
+            return f"已在{site_name}搜索“{query}”。页面中识别到的价格包括：{sample}。"
+        if self._looks_login_required(snapshot_text):
+            return f"已在{site_name}搜索“{query}”，但页面要求登录或重新登录，暂时无法读取商品价格。"
+        if "加载中" in snapshot_text:
+            return f"已在{site_name}搜索“{query}”，但商品列表仍在加载中，暂时没有读到价格。"
+        if payload.get("url"):
+            return f"已在{site_name}打开“{query}”的搜索结果页，但当前页面没有读到明确价格。"
+        return f"已尝试在{site_name}搜索“{query}”，但没有读到搜索结果。"
+
+    def _extract_prices(self, snapshot_text: str) -> list[str]:
+        seen = set()
+        prices = []
+        for match in re.finditer(r"[¥￥]\s*\d+(?:\.\d+)?|\b\d{3,6}(?:\.\d{1,2})?\s*元", snapshot_text):
+            price = re.sub(r"\s+", "", match.group(0))
+            if price not in seen:
+                seen.add(price)
+                prices.append(price)
+            if len(prices) >= 10:
+                break
+        return prices
+
+    def _looks_login_required(self, snapshot_text: str) -> bool:
+        return any(marker in snapshot_text for marker in {"请登录", "重新登录", "扫码登录", "密码登录"})
+
+    def _default_shopping_screenshot_path(self, site: str) -> Path:
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        return Path(__file__).resolve().parents[4] / ".run_logs" / "computer_control" / f"{site}-search-{timestamp}.png"
 
     def _browser_base(self, json_output: bool = False) -> list[str]:
         command = [self.command, "browser", "--browser-profile", self.browser_profile]
@@ -172,9 +272,9 @@ class OpenClawCLI:
     def _extract_screenshot_path(self, stdout: str) -> Path | None:
         for line in reversed(stdout.splitlines()):
             candidate = line.strip()
-            if not candidate.lower().endswith(".png"):
+            if not re.search(r"\.(png|jpe?g)$", candidate, re.IGNORECASE):
                 continue
-            match = re.search(r"(~[\\/][^\s]+\.png|[A-Za-z]:[\\/][^\s]+\.png)", candidate)
+            match = re.search(r"(~[\\/][^\s]+\.(?:png|jpe?g)|[A-Za-z]:[\\/][^\s]+\.(?:png|jpe?g))", candidate, re.IGNORECASE)
             if not match:
                 continue
             value = match.group(1)
