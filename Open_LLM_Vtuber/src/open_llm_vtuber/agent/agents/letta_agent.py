@@ -10,6 +10,7 @@ from ..transformers import (
 from ...config_manager import TTSPreprocessorConfig
 from ..input_types import BatchInput, TextSource
 from letta_client import Letta
+from .letta_tool_formatter import format_tool_return_for_user
 
 
 class LettaAgent(AgentInterface):
@@ -61,6 +62,13 @@ class LettaAgent(AgentInterface):
         for item in gen:
             yield item
 
+    def _format_tool_return(self, tool_return) -> str | None:
+        tool_return_str = str(tool_return)
+        error_keywords = ["Error executing function", "No function named", "KeyError"]
+        if any(keyword in tool_return_str for keyword in error_keywords):
+            return None
+        return format_tool_return_for_user(tool_return) or tool_return_str
+
     async def chat(self, input_data: BatchInput) -> AsyncIterator[SentenceOutput]:
         import sys
         
@@ -107,13 +115,12 @@ class LettaAgent(AgentInterface):
                     elif hasattr(token, 'tool_return') and token.tool_return:
                         print(f"[Letta Agent] Found tool_return: {token.tool_return}", file=sys.stderr)
                         # 跳过错误消息
-                        error_keywords = ['Error executing function', 'No function named', 'KeyError']
-                        tool_return_str = str(token.tool_return)
-                        if any(keyword in tool_return_str for keyword in error_keywords):
+                        tool_return_text = self._format_tool_return(token.tool_return)
+                        if not tool_return_text:
                             print(f"[Letta Agent] Filtering out error message", file=sys.stderr)
                         else:
-                            yield tool_return_str
-                            complete_response += tool_return_str
+                            yield tool_return_text
+                            complete_response += tool_return_text
                     else:
                         print(f"[Letta Agent] No content found in token with type: {token.message_type}", file=sys.stderr)
                 else:
@@ -137,13 +144,12 @@ class LettaAgent(AgentInterface):
                     elif hasattr(token, 'tool_return') and token.tool_return:
                         print(f"[Letta Agent] Found tool_return attribute: {token.tool_return}", file=sys.stderr)
                         # 跳过错误消息
-                        error_keywords = ['Error executing function', 'No function named', 'KeyError']
-                        tool_return_str = str(token.tool_return)
-                        if any(keyword in tool_return_str for keyword in error_keywords):
+                        tool_return_text = self._format_tool_return(token.tool_return)
+                        if not tool_return_text:
                             print(f"[Letta Agent] Filtering out error message", file=sys.stderr)
                         else:
-                            yield tool_return_str
-                            complete_response += tool_return_str
+                            yield tool_return_text
+                            complete_response += tool_return_text
                     else:
                         # 尝试将整个token转换为字符串
                         token_str = str(token)
