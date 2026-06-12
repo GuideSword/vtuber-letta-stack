@@ -366,6 +366,16 @@ async def process_member_response(
                     logger.warning(
                         "Cannot broadcast tool status: broadcast_func or group_members missing."
                     )
+            elif (
+                isinstance(output_item, dict)
+                and output_item.get("type") == "chat-media"
+            ):
+                output_item["name"] = context.character_config.character_name
+                output_item["avatar"] = context.character_config.avatar
+                if broadcast_func and group_members:
+                    await broadcast_func(group_members, output_item)
+                else:
+                    await current_ws_send(json.dumps(output_item))
             elif isinstance(output_item, (SentenceOutput, AudioOutput)):
                 # Handle SentenceOutput or AudioOutput: Send to current user, broadcast audio later if needed
                 response_part = await process_agent_output(

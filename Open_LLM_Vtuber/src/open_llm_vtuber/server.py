@@ -17,6 +17,7 @@ from starlette.staticfiles import StaticFiles as StarletteStaticFiles
 from .routes import init_client_ws_route, init_webtool_routes, init_proxy_route
 from .service_context import ServiceContext
 from .config_manager.utils import Config
+from .computer_control.artifacts import COMPUTER_CONTROL_ARTIFACT_ROOT
 
 
 # Create a custom StaticFiles class that adds CORS headers
@@ -47,6 +48,19 @@ class AvatarStaticFiles(CORSStaticFiles):
 
     async def get_response(self, path: str, scope):
         allowed_extensions = (".jpg", ".jpeg", ".png", ".gif", ".svg")
+        if not any(path.lower().endswith(ext) for ext in allowed_extensions):
+            return Response("Forbidden file type", status_code=403)
+        response = await super().get_response(path, scope)
+        return response
+
+
+class ComputerControlArtifactStaticFiles(CORSStaticFiles):
+    """
+    Computer-control artifact handler with image-only restrictions.
+    """
+
+    async def get_response(self, path: str, scope):
+        allowed_extensions = (".jpg", ".jpeg", ".png", ".webp")
         if not any(path.lower().endswith(ext) for ext in allowed_extensions):
             return Response("Forbidden file type", status_code=403)
         response = await super().get_response(path, scope)
@@ -132,6 +146,15 @@ class WebSocketServer:
             "/avatars",
             AvatarStaticFiles(directory="avatars"),
             name="avatars",
+        )
+
+        COMPUTER_CONTROL_ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+        self.app.mount(
+            "/computer-control-artifacts",
+            ComputerControlArtifactStaticFiles(
+                directory=str(COMPUTER_CONTROL_ARTIFACT_ROOT)
+            ),
+            name="computer_control_artifacts",
         )
 
         # Mount web tool directory separately from frontend

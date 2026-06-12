@@ -100,6 +100,14 @@ async def process_single_conversation(
 
                     await websocket_send(json.dumps(output_item))
 
+                elif (
+                    isinstance(output_item, dict)
+                    and output_item.get("type") == "chat-media"
+                ):
+                    output_item["name"] = context.character_config.character_name
+                    output_item["avatar"] = context.character_config.avatar
+                    await websocket_send(json.dumps(output_item))
+
                 elif isinstance(output_item, (SentenceOutput, AudioOutput)):
                     # Handle SentenceOutput or AudioOutput
                     response_part = await process_agent_output(

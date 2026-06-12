@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import AsyncIterator, List, Dict, Any
 from .agent_interface import AgentInterface
 from ..output_types import SentenceOutput
@@ -10,7 +11,13 @@ from ..transformers import (
 from ...config_manager import TTSPreprocessorConfig
 from ..input_types import BatchInput, TextSource
 from letta_client import Letta
-from .letta_tool_formatter import format_tool_return_for_user
+from ...computer_control.artifacts import COMPUTER_CONTROL_ARTIFACT_ROOT
+from ...computer_control.bridge import ComputerControlBridge
+from ...computer_control.intent import detect_computer_control_intent
+from .letta_tool_formatter import (
+    extract_tool_media_for_user,
+    format_tool_return_for_user,
+)
 
 
 class LettaAgent(AgentInterface):
@@ -32,6 +39,7 @@ class LettaAgent(AgentInterface):
         self.url = f"http://{host}:{port}"
         self.client = Letta(base_url=self.url)
         self.id = id
+        self._computer_control_bridge = ComputerControlBridge()
         # Initialize decorator parameters
         self._tts_preprocessor_config = tts_preprocessor_config
         self._live2d_model = live2d_model
@@ -69,9 +77,57 @@ class LettaAgent(AgentInterface):
             return None
         return format_tool_return_for_user(tool_return) or tool_return_str
 
+    def _tool_media_messages(self, tool_return) -> list[dict[str, object]]:
+        return [
+            {
+                "type": "chat-media",
+                "media_type": item["type"],
+                "url": item["url"],
+                "caption": item.get("caption", ""),
+                "browser_view": {
+                    "debuggerFullscreenUrl": item["url"],
+                    "title": item.get("caption", "Browser screenshot"),
+                },
+            }
+            for item in extract_tool_media_for_user(tool_return)
+        ]
+
+    def _local_intent_arguments(self, local_intent) -> dict[str, object]:
+        arguments = dict(local_intent.arguments)
+        if (
+            local_intent.action == "browser_screenshot"
+            and not arguments.get("path")
+            and not arguments.get("output_path")
+        ):
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            arguments["path"] = str(
+                COMPUTER_CONTROL_ARTIFACT_ROOT / f"browser-screenshot-{timestamp}.png"
+            )
+        return arguments
+
     async def chat(self, input_data: BatchInput) -> AsyncIterator[SentenceOutput]:
         import sys
         
+        local_intent = detect_computer_control_intent(self._to_text_prompt(input_data))
+        if local_intent:
+            arguments = self._local_intent_arguments(local_intent)
+            print(
+                f"[Letta Agent] Running local computer_control intent: {local_intent.action} {arguments}",
+                file=sys.stderr,
+            )
+            result = self._computer_control_bridge.execute(
+                local_intent.action,
+                arguments,
+                requested_by="local_intent",
+            )
+            tool_return = result.to_dict()
+            tool_return_text = self._format_tool_return(tool_return)
+            if tool_return_text:
+                yield tool_return_text
+            for media_message in self._tool_media_messages(tool_return):
+                yield media_message
+            return
+
         messages = self._to_messages(input_data)
         print(f"[Letta Agent] Sending messages to Letta: {messages}", file=sys.stderr)
         
@@ -121,6 +177,8 @@ class LettaAgent(AgentInterface):
                         else:
                             yield tool_return_text
                             complete_response += tool_return_text
+                            for media_message in self._tool_media_messages(token.tool_return):
+                                yield media_message
                     else:
                         print(f"[Letta Agent] No content found in token with type: {token.message_type}", file=sys.stderr)
                 else:
@@ -150,6 +208,8 @@ class LettaAgent(AgentInterface):
                         else:
                             yield tool_return_text
                             complete_response += tool_return_text
+                            for media_message in self._tool_media_messages(token.tool_return):
+                                yield media_message
                     else:
                         # 尝试将整个token转换为字符串
                         token_str = str(token)

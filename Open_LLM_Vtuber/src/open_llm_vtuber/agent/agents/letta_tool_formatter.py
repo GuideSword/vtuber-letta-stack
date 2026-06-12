@@ -5,6 +5,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from ...computer_control.artifacts import artifact_url_for_path
+
 
 SITE_NAMES = {
     "jd.com": "京东",
@@ -35,6 +37,29 @@ def format_tool_return_for_user(tool_return: Any) -> str | None:
     return None
 
 
+def extract_tool_media_for_user(tool_return: Any) -> list[dict[str, str]]:
+    payload = _load_payload(tool_return)
+    if not payload or "status" not in payload or "action" not in payload:
+        return []
+
+    if payload.get("status") != "ok":
+        return []
+
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    screenshot_path = data.get("screenshot_path") or data.get("openclaw_screenshot_path")
+    screenshot_url = artifact_url_for_path(screenshot_path)
+    if not screenshot_url:
+        return []
+
+    return [
+        {
+            "type": "image",
+            "url": screenshot_url,
+            "caption": "浏览器截图",
+        }
+    ]
+
+
 def _format_ok(action: str, payload: dict[str, Any], message: str) -> str:
     if action == "browser_open":
         url = _extract_url(payload, message)
@@ -50,7 +75,7 @@ def _format_ok(action: str, payload: dict[str, Any], message: str) -> str:
     if action == "browser_screenshot":
         data = payload.get("data") or {}
         path = data.get("screenshot_path") or data.get("openclaw_screenshot_path")
-        return f"截图已保存到：{path}。" if path else "截图已完成。"
+        return _format_screenshot_suffix(path) if path else "截图已完成。"
     if action == "shopping_search":
         return _format_shopping_search(payload, message)
     if action == "browser_click":
@@ -64,6 +89,14 @@ def _format_ok(action: str, payload: dict[str, Any], message: str) -> str:
     return "操作已完成。"
 
 
+def _format_screenshot_suffix(screenshot_path: Any) -> str:
+    if not screenshot_path:
+        return ""
+    if artifact_url_for_path(str(screenshot_path)):
+        return "截图如下。"
+    return f"截图已保存到：{screenshot_path}。"
+
+
 def _format_shopping_search(payload: dict[str, Any], message: str) -> str:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     site = str(data.get("site") or "")
@@ -74,16 +107,16 @@ def _format_shopping_search(payload: dict[str, Any], message: str) -> str:
 
     if prices:
         price_text = "、".join(str(price) for price in prices[:5])
-        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        suffix = _format_screenshot_suffix(screenshot_path)
         return f"我在{site_name}搜索了“{query}”，页面里识别到的价格有：{price_text}。{suffix}"
     if data.get("login_required"):
-        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        suffix = _format_screenshot_suffix(screenshot_path)
         return f"我在{site_name}搜索了“{query}”，但页面要求登录或重新登录，所以暂时读不到商品价格。{suffix}"
     if data.get("loading"):
-        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        suffix = _format_screenshot_suffix(screenshot_path)
         return f"我在{site_name}搜索了“{query}”，但商品列表还在加载，暂时读不到价格。{suffix}"
     if message:
-        suffix = f"截图已保存到：{screenshot_path}。" if screenshot_path else ""
+        suffix = _format_screenshot_suffix(screenshot_path)
         return f"{message}{suffix}"
     return f"我已经打开{site_name}搜索“{query}”，但暂时没有读到明确价格。"
 
