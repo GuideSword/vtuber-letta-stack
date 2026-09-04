@@ -53,3 +53,9 @@ Letta/
 # Local agent runtime data (databases, memory, configs).
 **/.letta_data/
 **/.workbuddy/
+
+# AI editor local configs (Cursor / Gemini / Trae / Claude Code).
+**/.cursor/
+**/.gemini/
+**/.trae/
+**/.claude/
