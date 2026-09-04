@@ -3,7 +3,7 @@
 > 一个有长期记忆、能看屏幕、能操作桌面的本地 AI 女友（personal desktop AI companion）。
 > 基于 [Open-LLM-VTuber](https://github.com/t41372/Open-LLM-VTuber) 二次开发，集成 [Letta](https://www.letta.com/) 持久化记忆与 OpenClaw 桌面控制。
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-Apache_2.0-blue)
 ![Python](https://img.shields.io/badge/python-3.10--3.12-blue)
 ![Backend](https://img.shields.io/badge/backend-FastAPI-009688)
 ![Agent](https://img.shields.io/badge/agent-Letta-orange)
