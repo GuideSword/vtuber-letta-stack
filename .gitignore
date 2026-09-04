@@ -49,3 +49,7 @@ Open_LLM_Vtuber/backgrounds/*
 # Local Letta data backups.
 Letta/
 备份Letta/
+
+# Local agent runtime data (databases, memory, configs).
+**/.letta_data/
+**/.workbuddy/
